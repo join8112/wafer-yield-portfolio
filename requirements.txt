@@ -1,0 +1,13 @@
+# pandas is pinned to 2.2.x: LSWMD.pkl (WM-811K) was pickled with pandas 0.19,
+# and pandas 3.x dropped the compat mappings needed to unpickle it.
+pandas>=2.0,<2.3
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+matplotlib>=3.8
+seaborn>=0.13
+jupyter>=1.0
+kaggle>=1.6
+requests>=2.31
+pytest>=8.0
+ruff>=0.5

@@ -1,0 +1,26 @@
+# data (download with scripts/download_data.py; never commit raw data)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# models / artifacts
+models/
+*.pt
+*.pth
+mlruns/
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
