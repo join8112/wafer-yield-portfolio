@@ -45,7 +45,7 @@ flowchart LR
 ## Roadmap
 
 - [x] **Step 1 — Data exploration & problem framing**: loaders, cleaning, EDA notebooks, tests, CI
-- [ ] **Step 2 — Defect pattern classification** (WM-811K): baseline → CNN, imbalance handling, Grad-CAM _(code ready, awaiting results)_
+- [x] **Step 2 — Defect pattern classification** (WM-811K): baseline → CNN, imbalance handling, Grad-CAM
 - [ ] **Step 3 — Process-based fail prediction** (SECOM): feature reduction, LightGBM/XGBoost, SHAP
 - [ ] **Step 4 — Defect → yield analysis & demo**: yield loss per pattern, Streamlit app
 
@@ -88,7 +88,7 @@ _Model results are filled in as each step is completed._
 | Task | Model | Macro-F1 | Yield-loss capture* | Accuracy |
 |---|---|---|---|---|
 | Defect pattern (9 classes) | LightGBM, 15 handcrafted features | **0.861** | 0.921 | 0.967 |
-| Defect pattern (9 classes) | CNN, 64x64 maps | _training on Colab_ | — | — |
+| Defect pattern (9 classes) | CNN, 64x64 maps | **0.868** | 0.921 | 0.973 |
 
 | Task | Model | PR-AUC | Recall @ 5% false alarms |
 |---|---|---|---|
@@ -105,6 +105,16 @@ not the headline.
 The baseline's weak spots are `Scratch` (recall 0.70) and `Loc` (0.76): small, local patterns that
 are mostly *missed* (called `none`) rather than confused with another pattern.
 [Full baseline write-up](reports/findings_03_baseline.md)
+
+**The CNN fixes the baseline's weakest class but not all of them.** `Scratch` recall rose from
+0.70 to 0.83 (a thin line is easy for convolutions, hard for ring averages), while `Loc` fell from
+0.76 to 0.68 (position matters there, and the handcrafted features encode it more directly). The
+overall gain (+0.007 macro-F1) comes from one training run, so the fair summary is that the two
+models are on par overall and complementary, which points to an ensemble next.
+Grad-CAM confirms the CNN looks at the defect itself: the edge for `Edge-Ring`, the line for
+`Scratch`, the blob for `Loc`. [Full CNN write-up](reports/findings_04_cnn.md)
+
+<img src="reports/figures/cnn_gradcam.png" width="860" alt="Grad-CAM per defect class">
 
 <img src="reports/figures/baseline_confusion.png" width="420" alt="Baseline confusion matrix">
 <img src="reports/figures/baseline_importance.png" width="380" alt="Baseline feature importance">

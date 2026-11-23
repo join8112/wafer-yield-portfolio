@@ -1,0 +1,19 @@
+{
+  "model": "CNN (3 conv blocks, 2-channel 64x64 input)",
+  "macro_f1": 0.8681,
+  "weighted_f1": 0.9737,
+  "accuracy": 0.9735,
+  "yield_loss_capture": 0.9214,
+  "recall_per_class": {
+    "Center": 0.9325,
+    "Donut": 0.8649,
+    "Edge-Loc": 0.8526,
+    "Edge-Ring": 0.984,
+    "Loc": 0.6815,
+    "Near-full": 0.9667,
+    "Random": 0.896,
+    "Scratch": 0.8326,
+    "none": 0.9874
+  },
+  "epochs": 15
+}
