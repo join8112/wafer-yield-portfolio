@@ -208,7 +208,7 @@ baseline = [
     code(
         "report = evaluate.per_class_report(ds['y'][te], pred)\n"
         "results = {\n"
-        "    'model': 'LightGBM on 20 handcrafted features',\n"
+        "    'model': 'LightGBM on 15 handcrafted features',\n"
         "    **summary.round(4).to_dict(),\n"
         "    'recall_per_class': report['recall'].round(4).to_dict(),\n"
         "}\n"

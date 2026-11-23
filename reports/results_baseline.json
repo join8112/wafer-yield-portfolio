@@ -1,5 +1,5 @@
 {
-  "model": "LightGBM on 20 handcrafted features",
+  "model": "LightGBM on 15 handcrafted features",
   "macro_f1": 0.8608,
   "weighted_f1": 0.9678,
   "accuracy": 0.9669,

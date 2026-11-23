@@ -87,8 +87,8 @@ _Model results are filled in as each step is completed._
 
 | Task | Model | Macro-F1 | Yield-loss capture* | Accuracy |
 |---|---|---|---|---|
-| Defect pattern (9 classes) | LightGBM, 20 handcrafted features | — | — | — |
-| Defect pattern (9 classes) | CNN, 64x64 maps | — | — | — |
+| Defect pattern (9 classes) | LightGBM, 15 handcrafted features | **0.861** | 0.921 | 0.967 |
+| Defect pattern (9 classes) | CNN, 64x64 maps | _training on Colab_ | — | — |
 
 | Task | Model | PR-AUC | Recall @ 5% false alarms |
 |---|---|---|---|
@@ -98,7 +98,16 @@ _Model results are filled in as each step is completed._
 correctly. Macro-F1 treats a missed `Scratch` (a few dies) like a missed `Near-full` (a scrapped
 wafer); this metric weights mistakes by the dies they represent.
 
-Test set: 20% of labeled wafers, **split by lot** so no lot appears in both training and test.
+Test set: 34,585 wafers (20%), **split by lot** so no lot appears in both training and test.
+Predicting `none` for every wafer would already score 0.852 accuracy, which is why accuracy is
+not the headline.
+
+The baseline's weak spots are `Scratch` (recall 0.70) and `Loc` (0.76): small, local patterns that
+are mostly *missed* (called `none`) rather than confused with another pattern.
+[Full baseline write-up](reports/findings_03_baseline.md)
+
+<img src="reports/figures/baseline_confusion.png" width="420" alt="Baseline confusion matrix">
+<img src="reports/figures/baseline_importance.png" width="380" alt="Baseline feature importance">
 
 **Why these metrics:** both datasets are heavily imbalanced (most wafers are `none`; ~7% of
 SECOM runs fail), so accuracy would reward a model that always predicts the majority class.
