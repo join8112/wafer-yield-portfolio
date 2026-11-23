@@ -1,0 +1,9 @@
+# Minimal dependencies for deploying the demo on Streamlit Community Cloud.
+# The app adds ../src to the import path itself, so the package needs no install.
+streamlit>=1.50
+numpy>=1.26
+pandas>=2.0,<2.3
+scipy>=1.11
+scikit-learn>=1.4
+lightgbm>=4.0
+matplotlib>=3.8

@@ -18,6 +18,11 @@ SECOM_MODEL_FINDINGS = (
     _f5.read_text(encoding="utf-8") if _f5.exists() else "## Findings\n\n_To be written._"
 )
 
+_f6 = REPORTS / "findings_06_yield.md"
+YIELD_FINDINGS = (
+    _f6.read_text(encoding="utf-8") if _f6.exists() else "## Findings\n\n_To be written._"
+)
+
 NB_DIR = Path(__file__).resolve().parents[1] / "notebooks"
 
 SETUP = """\
@@ -530,6 +535,142 @@ cnn_nb = [
 ]
 
 
+yield_nb = [
+    md(
+        "# 06 · Defect pattern → yield: which pattern costs the most?\n\n"
+        "**Question:** a wafer map already shows its yield, so the useful question is not *how "
+        "much* yield was lost but *why*. Each defect pattern points to a different root cause "
+        "(tool, process step, handling), so attributing lost yield to patterns tells engineers "
+        "which problem to fix first.\n\n"
+        "**Method**\n"
+        "- *Baseline loss*: the mean yield of `none` wafers (training split). Every wafer loses "
+        "this much anyway; a pattern's cost is the loss **beyond** it.\n"
+        "- *Excess loss* per pattern = frequency × severity, in **wafer-equivalents** "
+        "(a wafer 10 points below baseline counts as 0.10 wafers lost).\n"
+        "- *Chained use*: on new wafers there is no label, so the pattern comes from the "
+        "classifier. Section 4 checks whether loss attributed with **predicted** patterns "
+        "matches the loss attributed with true labels on the test split."
+    ),
+    code(
+        "%matplotlib inline\n"
+        "import json\nimport warnings\nfrom pathlib import Path\n\n"
+        "import lightgbm as lgb\nimport matplotlib.pyplot as plt\nimport numpy as np\n"
+        "import pandas as pd\n\n"
+        "from wafer import evaluate\nfrom wafer import yield_analysis as ya\n"
+        "from wafer.data import FAILURE_TYPES\nfrom wafer.features import extract_features\n"
+        "from wafer.preprocess import load_dataset\n\n"
+        "FIG_DIR = Path('../reports/figures'); FIG_DIR.mkdir(parents=True, exist_ok=True)\n"
+        "pd.set_option('display.precision', 3)\n\n"
+        "ds = load_dataset()\n"
+        "names = np.array(FAILURE_TYPES)[ds['y']]\n"
+        "tr, va, te = (ds['split'] == s for s in ('train', 'val', 'test'))\n"
+        "BASE = ya.baseline_yield(ds['y'][tr], ds['die_yield'][tr])\n"
+        "print(f'baseline (none) yield: {BASE:.3f}')"
+    ),
+    md("## 1. Severity vs frequency"),
+    code(
+        "table = ya.yield_loss_table(ds['y'], ds['die_yield'], BASE)\n"
+        "table"
+    ),
+    code(
+        "order = table.index.tolist() + ['none']\n"
+        "fig, ax = plt.subplots(figsize=(8, 4))\n"
+        "ax.boxplot([ds['die_yield'][names == p] for p in order], showfliers=False)\n"
+        "ax.set_xticks(range(1, len(order) + 1), order, rotation=30)\n"
+        "ax.axhline(BASE, color='grey', ls='--', lw=1, label='baseline (none)')\n"
+        "ax.set_ylabel('die yield'); ax.legend(); ax.set_title('Die yield by pattern')\n"
+        "plt.tight_layout(); plt.savefig(FIG_DIR / 'yield_box_by_pattern.png', dpi=150)"
+    ),
+    code(
+        "t = table[table['excess_wafers'] > 0]\n"
+        "fig, ax = plt.subplots(figsize=(7, 5))\n"
+        "ax.scatter(t['wafers'], t['excess_per_wafer'] * 100, s=t['excess_wafers'] * 3,\n"
+        "           alpha=0.5, color='#4C72B0', edgecolor='k')\n"
+        "# label offsets (points) so the crowded bubbles on the right stay readable\n"
+        "offset = {'Center': (-10, 38), 'Edge-Loc': (25, -38), 'Loc': (-45, -12),\n"
+        "          'Edge-Ring': (30, 32)}\n"
+        "for p, r in t.iterrows():\n"
+        "    dx, dy = offset.get(p, (0, 0))\n"
+        "    ax.annotate(f\"{p}\\n{r['excess_wafers']:.0f}\",\n"
+        "                (r['wafers'], r['excess_per_wafer'] * 100),\n"
+        "                xytext=(dx, dy), textcoords='offset points',\n"
+        "                ha='center', va='center', fontsize=8,\n"
+        "                arrowprops=dict(arrowstyle='-', lw=0.6) if dx or dy else None)\n"
+        "ax.set_xscale('log'); ax.set_xlabel('wafers with this pattern (log scale)')\n"
+        "ax.set_ylabel('yield points lost per wafer, beyond baseline')\n"
+        "ax.set_title('Severity x frequency (bubble = total excess loss, wafer-equivalents)')\n"
+        "ax.margins(0.2); plt.tight_layout()\n"
+        "plt.savefig(FIG_DIR / 'yield_severity_frequency.png', dpi=150)"
+    ),
+    md("## 2. Pareto: where does pattern-caused loss go?"),
+    code(
+        "ax = ya.plot_pareto(table)\n"
+        "plt.savefig(FIG_DIR / 'yield_pareto.png', dpi=150)"
+    ),
+    md("## 3. How much of all lost yield do patterns explain?"),
+    code(
+        "total_loss = (1 - ds['die_yield']).sum()\n"
+        "pattern_excess = table['excess_wafers'].clip(lower=0).sum()\n"
+        "print(f'total loss: {total_loss:,.0f} wafer-equivalents')\n"
+        "print(f'excess loss caused by patterns: {pattern_excess:,.0f} '\n"
+        "      f'({pattern_excess / total_loss:.1%} of all loss)')"
+    ),
+    md(
+        "## 4. Chained: attribute loss with the classifier's predictions\n\n"
+        "Same LightGBM baseline as notebook 03, trained on the training split. On the test "
+        "split, compare the loss attributed to each pattern using predicted vs true labels."
+    ),
+    code(
+        "%%time\n"
+        "F = extract_features(ds['X'])\n"
+        "clf = lgb.LGBMClassifier(\n"
+        "    n_estimators=2000, learning_rate=0.05, num_leaves=63,\n"
+        "    class_weight='balanced', subsample=0.8, subsample_freq=1,\n"
+        "    colsample_bytree=0.8, random_state=42, verbose=-1,\n"
+        ")\n"
+        "# eval_set works on every LightGBM 4.x; newer versions only warn that it is renamed\n"
+        "warnings.filterwarnings('ignore', message='.*eval_set.*')\n"
+        "clf.fit(F[tr], ds['y'][tr], eval_set=[(F[va], ds['y'][va])],\n"
+        "        callbacks=[lgb.early_stopping(100, verbose=False)])\n"
+        "pred = clf.predict(F[te])\n"
+        "evaluate.summarize(ds['y'][te], pred, ds['n_fail'][te], name='LightGBM')"
+    ),
+    code(
+        "attr = ya.attribution_error(ds['y'][te], pred, ds['die_yield'][te], BASE)\n"
+        "attr"
+    ),
+    code(
+        "a = attr[attr['true'] > 0]\n"
+        "x = np.arange(len(a)); w = 0.4\n"
+        "fig, ax = plt.subplots(figsize=(8, 4))\n"
+        "ax.bar(x - w / 2, a['true'], w, label='true labels')\n"
+        "ax.bar(x + w / 2, a['predicted'], w, label='predicted by classifier')\n"
+        "ax.set_xticks(x, a.index, rotation=30)\n"
+        "ax.set_ylabel('excess loss (wafer-equivalents)')\n"
+        "ax.set_title('Test split: loss attributed with predicted vs true patterns')\n"
+        "ax.legend(); plt.tight_layout()\n"
+        "plt.savefig(FIG_DIR / 'yield_attribution_test.png', dpi=150)"
+    ),
+    code(
+        "same_rank = list(attr.index[:3]) == list(attr.sort_values('predicted', "
+        "ascending=False).index[:3])\n"
+        "print('top-3 priority order identical with predicted labels:', same_rank)"
+    ),
+    md("## 5. Save results for the README and the app"),
+    code(
+        "results = {\n"
+        "    'baseline_yield': round(BASE, 4),\n"
+        "    'pattern_share_of_all_loss': round(float(pattern_excess / total_loss), 4),\n"
+        "    'table': table.round(4).reset_index().to_dict(orient='records'),\n"
+        "    'test_attribution': attr.round(3).reset_index().to_dict(orient='records'),\n"
+        "}\n"
+        "Path('../reports/results_yield.json').write_text(json.dumps(results, indent=2))\n"
+        "table.round(3)"
+    ),
+    md(YIELD_FINDINGS),
+]
+
+
 def write(cells, name):
     nb = nbf.v4.new_notebook()
     nb["cells"] = cells
@@ -548,6 +689,7 @@ NOTEBOOKS = {
     "03_baseline_features.ipynb": baseline,
     "04_cnn_colab.ipynb": cnn_nb,
     "05_secom_model.ipynb": secom_model,
+    "06_yield_by_pattern.ipynb": yield_nb,
 }
 
 if __name__ == "__main__":

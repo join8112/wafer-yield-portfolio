@@ -7,6 +7,7 @@
 > **中文摘要：** 以公開半導體資料建立兩個模型：(1) 晶圓圖缺陷型態分類（WM-811K，CNN），
 > (2) 由製程感測參數預測良品/不良（SECOM，梯度提升 + SHAP），並分析不同缺陷型態造成的良率損失。
 > 重點放在不平衡資料處理、可解釋性，以及對製程工程師有用的結論。
+> 最後以 Streamlit 互動展示串起三部分：分類晶圓、估計各缺陷型態的良率損失、找出關鍵製程訊號。
 
 ## Why this project
 
@@ -31,11 +32,12 @@ one wafer cannot be traced from its process readings to its defect pattern. The
 ```mermaid
 flowchart LR
     A[WM-811K wafer maps] --> B[EDA & cleaning]
-    B --> C[Baseline: handcrafted features + XGBoost]
+    B --> C[Baseline: handcrafted features + LightGBM]
     B --> D[CNN + augmentation, Grad-CAM]
     C & D --> E[Defect pattern]
     B --> F[Die yield per wafer]
     E & F --> G[Yield loss by pattern]
+    G & K --> L[Streamlit demo]
 
     H[SECOM sensors] --> I[EDA: missing data, redundancy, drift]
     I --> J[Feature reduction + gradient boosting]
@@ -47,9 +49,9 @@ flowchart LR
 - [x] **Step 1 — Data exploration & problem framing**: loaders, cleaning, EDA notebooks, tests, CI
 - [x] **Step 2 — Defect pattern classification** (WM-811K): baseline → CNN, imbalance handling, Grad-CAM
 - [x] **Step 3 — Process-based fail prediction** (SECOM): leakage-free pipeline, time split, LightGBM, SHAP, drift analysis
-- [ ] **Step 4 — Defect → yield analysis & demo**: yield loss per pattern, Streamlit app
+- [x] **Step 4 — Defect → yield analysis & demo**: yield loss per pattern, chained attribution, Streamlit app
 
-## Key findings so far (step 1: EDA)
+## Key findings from data exploration
 
 **Defect pattern drives yield loss, but unevenly.** Mean die yield by pattern on the 172,950
 labeled WM-811K wafers:
@@ -83,7 +85,10 @@ Full write-ups: [WM-811K findings](reports/findings_01_wm811k.md) ·
 
 ## Results
 
-_Model results are filled in as each step is completed._
+**Why these metrics:** both datasets are heavily imbalanced (most wafers are `none`; ~7% of
+SECOM runs fail), so accuracy would reward a model that always predicts the majority class.
+
+### Defect pattern classification (WM-811K)
 
 | Task | Model | Macro-F1 | Yield-loss capture* | Accuracy |
 |---|---|---|---|---|
@@ -101,6 +106,9 @@ not the headline.
 The baseline's weak spots are `Scratch` (recall 0.70) and `Loc` (0.76): small, local patterns that
 are mostly *missed* (called `none`) rather than confused with another pattern.
 [Full baseline write-up](reports/findings_03_baseline.md)
+
+<img src="reports/figures/baseline_confusion.png" width="420" alt="Baseline confusion matrix">
+<img src="reports/figures/baseline_importance.png" width="380" alt="Baseline feature importance">
 
 **The CNN fixes the baseline's weakest class but not all of them.** `Scratch` recall rose from
 0.70 to 0.83 (a thin line is easy for convolutions, hard for ring averages), while `Loc` fell from
@@ -139,25 +147,59 @@ monitoring and regular retraining. [Full SECOM write-up](reports/findings_05_sec
 
 <img src="reports/figures/secom_sensor_drift.png" width="560" alt="Top sensors lose their signal after the split">
 
-<img src="reports/figures/baseline_confusion.png" width="420" alt="Baseline confusion matrix">
-<img src="reports/figures/baseline_importance.png" width="380" alt="Baseline feature importance">
+### Defect pattern → yield: which problem to fix first?
 
-**Why these metrics:** both datasets are heavily imbalanced (most wafers are `none`; ~7% of
-SECOM runs fail), so accuracy would reward a model that always predicts the majority class.
+A wafer map already shows its yield, so the useful question is *why* dies were lost. Each pattern
+points to a different root cause, so the loss is attributed to patterns: frequency × the yield
+lost per wafer beyond pattern-free wafers (89.4%).
+
+| | Center | Edge-Ring | Edge-Loc | Random | Loc | Near-full | Donut | Scratch |
+|---|---|---|---|---|---|---|---|---|
+| Points lost per wafer | 13 | 5 | 8 | 37 | 4 | 77 | 17 | −1 |
+| Share of pattern-caused loss | **26%** | **21%** | **19%** | 16% | 8% | 6% | 5% | 0% |
+
+- **Severity is not priority.** `Near-full` wafers are nearly scrapped, yet the pattern ranks 6th
+  because it is rare. Three frequent, mild patterns cause two thirds of pattern-caused loss, and
+  `Center` is the first one to fix.
+- **Patterns explain about 10% of all lost yield**; the rest is baseline loss on every wafer,
+  which needs process data (as in the SECOM analysis) rather than map patterns.
+- **The chain works with predicted labels.** On the test split, loss attributed with the
+  classifier's predictions is within 8% of the true attribution for every costly pattern
+  except `Loc` (+16%), and the top-3 priority order is unchanged. So the same analysis can run
+  on new, unlabeled wafers. [Full write-up](reports/findings_06_yield.md)
+
+<img src="reports/figures/yield_severity_frequency.png" width="560" alt="Severity vs frequency of each defect pattern">
+
+## Interactive demo
+
+A Streamlit app ties the three parts together: classify a wafer map (test-set examples or your
+own CSV), see what its pattern costs and its typical suspects, explore the yield-loss ranking,
+and review the SECOM drift findings.
+
+<img src="reports/figures/app_demo.png" width="860" alt="Streamlit demo: classify a wafer">
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+It needs only the small files in `app/assets/` (a ~5 MB model and 225 test wafers), so it also
+runs on [Streamlit Community Cloud](https://streamlit.io/cloud) with `app/streamlit_app.py` as the
+entry point. `python scripts/build_app_assets.py` rebuilds those files from the dataset.
 
 ## Repository structure
 
 ```
 ├── data/                 # raw/ and processed/ (git-ignored; see "Quick start")
-├── notebooks/            # 01-02 EDA, 03 feature baseline, 04 CNN (Colab), 05 SECOM model
+├── notebooks/            # 01-02 EDA, 03 baseline, 04 CNN (Colab), 05 SECOM, 06 yield
 ├── reports/figures/      # charts used in this README
 ├── scripts/
 │   ├── download_data.py  # fetches both datasets
 │   ├── prepare_wm811k.py # 64x64 maps + lot-grouped split -> compact .npz
+│   ├── build_app_assets.py # small model + sample wafers for the demo
 │   └── make_notebooks.py # notebooks are generated from source for clean diffs
-├── src/wafer/            # data, eda, preprocess, features, evaluate, cnn, secom
+├── src/wafer/            # data, eda, preprocess, features, evaluate, cnn, secom, yield_analysis
 ├── tests/                # pytest on synthetic data, runs in CI without downloads
-└── app/                  # Streamlit demo (step 4)
+└── app/                  # Streamlit demo + its assets
 ```
 
 ## Quick start
@@ -175,6 +217,8 @@ jupyter lab notebooks/          # 01, 02: exploratory analysis
 python scripts/prepare_wm811k.py  # builds data/processed/wm811k_labeled_64.npz
                                   # 03: feature baseline (CPU, a few minutes)
                                   # 05: SECOM model (CPU, under a minute)
+                                  # 06: yield by pattern (CPU, ~2 minutes)
+streamlit run app/streamlit_app.py  # interactive demo
 pytest
 ```
 
@@ -184,8 +228,8 @@ switch the runtime to a T4 GPU and run all cells. Colab machines are wiped after
 so put `wm811k_labeled_64.npz` (~40 MB) in Google Drive at `MyDrive/wafer/` (or set
 `USE_DRIVE = False` to upload it directly). Results are saved to Drive and downloaded as a zip.
 
-> `pandas` is pinned below 3.0 because `LSWMD.pkl` was saved with a very old pandas version
-> that pandas 3 can no longer read.
+> `pandas` is pinned to 2.2.x because `LSWMD.pkl` was saved with a very old pandas version
+> that newer releases can no longer read.
 
 CNN training (step 2) is designed to run on **Google Colab's free GPU**; everything else runs
 on a laptop CPU.
@@ -196,8 +240,9 @@ on a laptop CPU.
 - **Computer vision**: CNN on wafer-map images, Grad-CAM interpretability
 - **High-dimensional tabular ML**: leakage-free preprocessing pipeline, L1 selection, gradient boosting, SHAP
 - **Honest evaluation**: time-ordered and lot-grouped splits, bootstrap intervals, adversarial validation for drift
-- **Domain reasoning**: connecting defect patterns and process signals to yield
+- **Domain reasoning**: yield-loss attribution by defect pattern (frequency × severity), prioritising fixes, sensor shortlists for engineers
 - **Engineering**: installable package, tests on synthetic data, CI, reproducible setup
+- **Communication**: interactive Streamlit demo, findings written for engineers and managers
 
 ## License
 

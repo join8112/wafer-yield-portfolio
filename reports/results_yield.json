@@ -1,0 +1,128 @@
+{
+  "baseline_yield": 0.8943,
+  "pattern_share_of_all_loss": 0.1022,
+  "table": [
+    {
+      "pattern": "Center",
+      "wafers": 4294,
+      "mean_yield": 0.7675,
+      "excess_per_wafer": 0.1268,
+      "excess_wafers": 544.3276,
+      "share": 0.2618,
+      "gain_if_fixed_pts": 0.3147
+    },
+    {
+      "pattern": "Edge-Ring",
+      "wafers": 9680,
+      "mean_yield": 0.8487,
+      "excess_per_wafer": 0.0456,
+      "excess_wafers": 441.1634,
+      "share": 0.2122,
+      "gain_if_fixed_pts": 0.2551
+    },
+    {
+      "pattern": "Edge-Loc",
+      "wafers": 5189,
+      "mean_yield": 0.8172,
+      "excess_per_wafer": 0.0771,
+      "excess_wafers": 400.1612,
+      "share": 0.1925,
+      "gain_if_fixed_pts": 0.2314
+    },
+    {
+      "pattern": "Random",
+      "wafers": 866,
+      "mean_yield": 0.5194,
+      "excess_per_wafer": 0.3749,
+      "excess_wafers": 324.6508,
+      "share": 0.1562,
+      "gain_if_fixed_pts": 0.1877
+    },
+    {
+      "pattern": "Loc",
+      "wafers": 3593,
+      "mean_yield": 0.85,
+      "excess_per_wafer": 0.0442,
+      "excess_wafers": 158.8912,
+      "share": 0.0764,
+      "gain_if_fixed_pts": 0.0919
+    },
+    {
+      "pattern": "Near-full",
+      "wafers": 149,
+      "mean_yield": 0.1231,
+      "excess_per_wafer": 0.7712,
+      "excess_wafers": 114.9053,
+      "share": 0.0553,
+      "gain_if_fixed_pts": 0.0664
+    },
+    {
+      "pattern": "Donut",
+      "wafers": 555,
+      "mean_yield": 0.7232,
+      "excess_per_wafer": 0.1711,
+      "excess_wafers": 94.9636,
+      "share": 0.0457,
+      "gain_if_fixed_pts": 0.0549
+    },
+    {
+      "pattern": "Scratch",
+      "wafers": 1193,
+      "mean_yield": 0.8994,
+      "excess_per_wafer": -0.0051,
+      "excess_wafers": -6.1425,
+      "share": 0.0,
+      "gain_if_fixed_pts": 0.0
+    }
+  ],
+  "test_attribution": [
+    {
+      "pattern": "Center",
+      "true": 107.5,
+      "predicted": 110.555,
+      "error_pct": 0.028
+    },
+    {
+      "pattern": "Edge-Ring",
+      "true": 84.722,
+      "predicted": 85.229,
+      "error_pct": 0.006
+    },
+    {
+      "pattern": "Edge-Loc",
+      "true": 70.568,
+      "predicted": 76.043,
+      "error_pct": 0.078
+    },
+    {
+      "pattern": "Random",
+      "true": 66.949,
+      "predicted": 62.686,
+      "error_pct": -0.064
+    },
+    {
+      "pattern": "Loc",
+      "true": 36.107,
+      "predicted": 41.716,
+      "error_pct": 0.155
+    },
+    {
+      "pattern": "Near-full",
+      "true": 23.786,
+      "predicted": 25.673,
+      "error_pct": 0.079
+    },
+    {
+      "pattern": "Donut",
+      "true": 17.891,
+      "predicted": 16.76,
+      "error_pct": -0.063
+    },
+    {
+      "pattern": "Scratch",
+      "true": -2.246,
+      "predicted": -2.55,
+      "error_pct": -0.135
+    }
+  ]
+}
