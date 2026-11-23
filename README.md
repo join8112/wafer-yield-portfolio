@@ -45,7 +45,7 @@ flowchart LR
 ## Roadmap
 
 - [x] **Step 1 — Data exploration & problem framing**: loaders, cleaning, EDA notebooks, tests, CI
-- [ ] **Step 2 — Defect pattern classification** (WM-811K): baseline → CNN, imbalance handling, Grad-CAM
+- [ ] **Step 2 — Defect pattern classification** (WM-811K): baseline → CNN, imbalance handling, Grad-CAM _(code ready, awaiting results)_
 - [ ] **Step 3 — Process-based fail prediction** (SECOM): feature reduction, LightGBM/XGBoost, SHAP
 - [ ] **Step 4 — Defect → yield analysis & demo**: yield loss per pattern, Streamlit app
 
@@ -85,10 +85,20 @@ Full write-ups: [WM-811K findings](reports/findings_01_wm811k.md) ·
 
 _Model results are filled in as each step is completed._
 
-| Task | Model | Metric | Score |
+| Task | Model | Macro-F1 | Yield-loss capture* | Accuracy |
+|---|---|---|---|---|
+| Defect pattern (9 classes) | LightGBM, 20 handcrafted features | — | — | — |
+| Defect pattern (9 classes) | CNN, 64x64 maps | — | — | — |
+
+| Task | Model | PR-AUC | Recall @ 5% false alarms |
 |---|---|---|---|
-| Defect pattern (9 classes) | — | Macro-F1 | — |
-| Process fail prediction | — | PR-AUC | — |
+| Process fail prediction | — | — | — |
+
+\* *Yield-loss capture*: share of failing dies on patterned wafers whose pattern was identified
+correctly. Macro-F1 treats a missed `Scratch` (a few dies) like a missed `Near-full` (a scrapped
+wafer); this metric weights mistakes by the dies they represent.
+
+Test set: 20% of labeled wafers, **split by lot** so no lot appears in both training and test.
 
 **Why these metrics:** both datasets are heavily imbalanced (most wafers are `none`; ~7% of
 SECOM runs fail), so accuracy would reward a model that always predicts the majority class.
@@ -97,12 +107,13 @@ SECOM runs fail), so accuracy would reward a model that always predicts the majo
 
 ```
 ├── data/                 # raw/ and processed/ (git-ignored; see "Quick start")
-├── notebooks/            # 01_eda_wm811k, 02_eda_secom, ...
+├── notebooks/            # 01-02 EDA, 03 feature baseline, 04 CNN (Colab)
 ├── reports/figures/      # charts used in this README
 ├── scripts/
 │   ├── download_data.py  # fetches both datasets
+│   ├── prepare_wm811k.py # 64x64 maps + lot-grouped split -> compact .npz
 │   └── make_notebooks.py # notebooks are generated from source for clean diffs
-├── src/wafer/            # importable package: data loading, EDA, (models later)
+├── src/wafer/            # data, eda, preprocess, features, evaluate, cnn
 ├── tests/                # pytest on synthetic data, runs in CI without downloads
 └── app/                  # Streamlit demo (step 4)
 ```
@@ -118,9 +129,17 @@ pip install -r requirements.txt && pip install -e .
 # SECOM downloads directly. WM-811K needs a Kaggle token in ~/.kaggle/kaggle.json
 python scripts/download_data.py
 
-jupyter lab notebooks/
+jupyter lab notebooks/          # 01, 02: exploratory analysis
+python scripts/prepare_wm811k.py  # builds data/processed/wm811k_labeled_64.npz
+                                  # 03: feature baseline (CPU, a few minutes)
 pytest
 ```
+
+**CNN (notebook 04) on Colab:** open
+[`04_cnn_colab.ipynb` in Colab](https://colab.research.google.com/github/join8112/wafer-yield-portfolio/blob/main/notebooks/04_cnn_colab.ipynb),
+switch the runtime to a T4 GPU and run all cells. Colab machines are wiped after each session,
+so put `wm811k_labeled_64.npz` (~40 MB) in Google Drive at `MyDrive/wafer/` (or set
+`USE_DRIVE = False` to upload it directly). Results are saved to Drive and downloaded as a zip.
 
 > `pandas` is pinned below 3.0 because `LSWMD.pkl` was saved with a very old pandas version
 > that pandas 3 can no longer read.

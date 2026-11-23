@@ -1,0 +1,18 @@
+{
+  "model": "LightGBM on 20 handcrafted features",
+  "macro_f1": 0.8608,
+  "weighted_f1": 0.9678,
+  "accuracy": 0.9669,
+  "yield_loss_capture": 0.9211,
+  "recall_per_class": {
+    "Center": 0.9045,
+    "Donut": 0.8198,
+    "Edge-Loc": 0.868,
+    "Edge-Ring": 0.9773,
+    "Loc": 0.7622,
+    "Near-full": 1.0,
+    "Random": 0.8671,
+    "Scratch": 0.6987,
+    "none": 0.9797
+  }
+}
