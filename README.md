@@ -46,7 +46,7 @@ flowchart LR
 
 - [x] **Step 1 — Data exploration & problem framing**: loaders, cleaning, EDA notebooks, tests, CI
 - [x] **Step 2 — Defect pattern classification** (WM-811K): baseline → CNN, imbalance handling, Grad-CAM
-- [ ] **Step 3 — Process-based fail prediction** (SECOM): feature reduction, LightGBM/XGBoost, SHAP
+- [x] **Step 3 — Process-based fail prediction** (SECOM): leakage-free pipeline, time split, LightGBM, SHAP, drift analysis
 - [ ] **Step 4 — Defect → yield analysis & demo**: yield loss per pattern, Streamlit app
 
 ## Key findings so far (step 1: EDA)
@@ -90,10 +90,6 @@ _Model results are filled in as each step is completed._
 | Defect pattern (9 classes) | LightGBM, 15 handcrafted features | **0.861** | 0.921 | 0.967 |
 | Defect pattern (9 classes) | CNN, 64x64 maps | **0.868** | 0.921 | 0.973 |
 
-| Task | Model | PR-AUC | Recall @ 5% false alarms |
-|---|---|---|---|
-| Process fail prediction | — | — | — |
-
 \* *Yield-loss capture*: share of failing dies on patterned wafers whose pattern was identified
 correctly. Macro-F1 treats a missed `Scratch` (a few dies) like a missed `Near-full` (a scrapped
 wafer); this metric weights mistakes by the dies they represent.
@@ -116,6 +112,33 @@ Grad-CAM confirms the CNN looks at the defect itself: the edge for `Edge-Ring`, 
 
 <img src="reports/figures/cnn_gradcam.png" width="860" alt="Grad-CAM per defect class">
 
+### Process fail prediction (SECOM)
+
+Trained on the earliest 70% of runs, tested on the latest 30% (471 runs, 26 failures).
+Brackets are bootstrap 95% intervals.
+
+| Model | Random-CV PR-AUC | **Time-split PR-AUC** | Time-split ROC-AUC | Recall @ 5% false alarms |
+|---|---|---|---|---|
+| Logistic regression (L1) | 0.192 | 0.082 [0.044, 0.172] | 0.539 | 0.15 |
+| LightGBM | 0.196 | 0.086 [0.054, 0.143] | 0.662 | 0.04 |
+| *Random model (= fail rate)* | *0.066* | *0.055* | *0.500* | *0.05* |
+
+**The headline is a negative result, and why.** Shuffled cross-validation, used in many SECOM
+write-ups, suggests the model is ~3x better than chance. On a later time period it is barely
+better than chance. Two checks explain the gap:
+
+- **The sensors shift:** a classifier separates training-period from test-period runs with
+  **AUC 0.996** (adversarial validation).
+- **The sensor–failure link changes:** `f059`, the most important sensor in training (single-sensor
+  AUC 0.76), has no signal afterwards (0.47); 7 of the top 10 sensors lose most of their signal.
+
+So a model trained once should not run as a fail alarm. It still gives engineers a useful
+shortlist: sensors that predicted failures *both* before and after the shift (`f033`, `f102`,
+`f000`), and sensors that drifted most (`f116`, `f542`, `f058`). Deployment would need drift
+monitoring and regular retraining. [Full SECOM write-up](reports/findings_05_secom_model.md)
+
+<img src="reports/figures/secom_sensor_drift.png" width="560" alt="Top sensors lose their signal after the split">
+
 <img src="reports/figures/baseline_confusion.png" width="420" alt="Baseline confusion matrix">
 <img src="reports/figures/baseline_importance.png" width="380" alt="Baseline feature importance">
 
@@ -126,13 +149,13 @@ SECOM runs fail), so accuracy would reward a model that always predicts the majo
 
 ```
 ├── data/                 # raw/ and processed/ (git-ignored; see "Quick start")
-├── notebooks/            # 01-02 EDA, 03 feature baseline, 04 CNN (Colab)
+├── notebooks/            # 01-02 EDA, 03 feature baseline, 04 CNN (Colab), 05 SECOM model
 ├── reports/figures/      # charts used in this README
 ├── scripts/
 │   ├── download_data.py  # fetches both datasets
 │   ├── prepare_wm811k.py # 64x64 maps + lot-grouped split -> compact .npz
 │   └── make_notebooks.py # notebooks are generated from source for clean diffs
-├── src/wafer/            # data, eda, preprocess, features, evaluate, cnn
+├── src/wafer/            # data, eda, preprocess, features, evaluate, cnn, secom
 ├── tests/                # pytest on synthetic data, runs in CI without downloads
 └── app/                  # Streamlit demo (step 4)
 ```
@@ -151,6 +174,7 @@ python scripts/download_data.py
 jupyter lab notebooks/          # 01, 02: exploratory analysis
 python scripts/prepare_wm811k.py  # builds data/processed/wm811k_labeled_64.npz
                                   # 03: feature baseline (CPU, a few minutes)
+                                  # 05: SECOM model (CPU, under a minute)
 pytest
 ```
 
@@ -170,7 +194,8 @@ on a laptop CPU.
 
 - **Imbalanced classification**: metric choice, class weighting, augmentation
 - **Computer vision**: CNN on wafer-map images, Grad-CAM interpretability
-- **High-dimensional tabular ML**: missing data, redundant features, gradient boosting, SHAP
+- **High-dimensional tabular ML**: leakage-free preprocessing pipeline, L1 selection, gradient boosting, SHAP
+- **Honest evaluation**: time-ordered and lot-grouped splits, bootstrap intervals, adversarial validation for drift
 - **Domain reasoning**: connecting defect patterns and process signals to yield
 - **Engineering**: installable package, tests on synthetic data, CI, reproducible setup
 

@@ -13,6 +13,10 @@ import nbformat as nbf
 REPORTS = Path(__file__).resolve().parents[1] / "reports"
 WM_FINDINGS = (REPORTS / "findings_01_wm811k.md").read_text(encoding="utf-8")
 SECOM_FINDINGS = (REPORTS / "findings_02_secom.md").read_text(encoding="utf-8")
+_f5 = REPORTS / "findings_05_secom_model.md"
+SECOM_MODEL_FINDINGS = (
+    _f5.read_text(encoding="utf-8") if _f5.exists() else "## Findings\n\n_To be written._"
+)
 
 NB_DIR = Path(__file__).resolve().parents[1] / "notebooks"
 
@@ -218,6 +222,165 @@ baseline = [
     md("## Findings\n\n_Send the outputs above to Claude to write this section._"),
 ]
 
+secom_model = [
+    md(
+        "# 05 · SECOM: predicting failing runs from process sensors\n\n"
+        "**Goal:** flag failing production runs from 590 anonymised sensor readings, and find "
+        "which sensors drive the prediction.\n\n"
+        "**Setup** (decided in notebook 02)\n"
+        "- **Time-ordered split:** train on the earliest 70% of runs, test on the latest 30%. "
+        "This is how a fab would deploy the model, and notebook 02 showed the fail rate drifts.\n"
+        "- **No leakage:** sensor dropping, imputation and scaling are fitted on training runs "
+        "only, inside a scikit-learn `Pipeline`.\n"
+        "- **Metrics:** PR-AUC (compare with the fail rate, which is what a random model scores), "
+        "ROC-AUC, and *recall at 5% false alarms*: the share of failing runs caught if engineers "
+        "inspect 5% of good runs. With only ~26 failing test runs, every number gets a bootstrap "
+        "95% interval.\n"
+        "- **Models:** L1 logistic regression (sparse, interpretable) and LightGBM, with fixed "
+        "settings chosen before looking at the test period."
+    ),
+    code(
+        "%matplotlib inline\n"
+        "import json, warnings\nfrom pathlib import Path\n\n"
+        "import matplotlib.pyplot as plt\nimport numpy as np\nimport pandas as pd\n"
+        "import lightgbm as lgb\n"
+        "from sklearn.metrics import PrecisionRecallDisplay, roc_auc_score\n"
+        "from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold, "
+        "cross_val_predict\n\n"
+        "from wafer import secom as S\nfrom wafer.data import load_secom\n\n"
+        "warnings.filterwarnings('ignore', category=UserWarning)\n"
+        "FIG_DIR = Path('../reports/figures'); FIG_DIR.mkdir(parents=True, exist_ok=True)\n"
+        "pd.set_option('display.precision', 3)"
+    ),
+    code(
+        "X, meta = load_secom()\n"
+        "y = meta['fail'].astype(int).to_numpy()\n"
+        "tr, te = S.time_split(meta['timestamp'])\n"
+        "pd.DataFrame({\n"
+        "    'runs': [len(tr), len(te)],\n"
+        "    'fails': [y[tr].sum(), y[te].sum()],\n"
+        "    'fail_rate': [y[tr].mean(), y[te].mean()],\n"
+        "    'from': [meta['timestamp'].iloc[tr].min(), meta['timestamp'].iloc[te].min()],\n"
+        "    'to': [meta['timestamp'].iloc[tr].max(), meta['timestamp'].iloc[te].max()],\n"
+        "}, index=['train', 'test'])"
+    ),
+    md("## 1. Sensor cleaning (fitted on training runs only)"),
+    code(
+        "cleaner = S.SensorCleaner().fit(X.iloc[tr])\n"
+        "print(f'{cleaner.n_input_} sensors -> {len(cleaner.columns_)} after dropping '\n"
+        "      'mostly-missing, constant and near-duplicate (|r| > 0.95) sensors')"
+    ),
+    md(
+        "## 2. Random cross-validation vs. time-ordered test\n\n"
+        "Many published SECOM results use random cross-validation. Comparing it with the "
+        "time-ordered test shows how much that overstates performance."
+    ),
+    code(
+        "%%time\n"
+        "MODELS = {'Logistic (L1)': lambda: S.make_logreg(0.05), 'LightGBM': S.make_lgbm}\n"
+        "rows, test_scores = [], {}\n"
+        "for name, make in MODELS.items():\n"
+        "    cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=3, random_state=0)\n"
+        "    cv_pr = [S.score_all(y[b], make().fit(X.iloc[a], y[a]).predict_proba(X.iloc[b])"
+        "[:, 1])['pr_auc']\n"
+        "             for a, b in cv.split(X, y)]\n"
+        "    model = make().fit(X.iloc[tr], y[tr])\n"
+        "    p = model.predict_proba(X.iloc[te])[:, 1]\n"
+        "    test_scores[name] = (model, p)\n"
+        "    r = S.score_all(y[te], p)\n"
+        "    lo, hi = S.bootstrap_ci(y[te], p)\n"
+        "    rlo, rhi = S.bootstrap_ci(y[te], p, roc_auc_score)\n"
+        "    rows.append({\n"
+        "        'model': name,\n"
+        "        'random-CV PR-AUC': f'{np.mean(cv_pr):.3f} ± {np.std(cv_pr):.3f}',\n"
+        "        'CV fail rate': f'{y.mean():.3f}',\n"
+        "        'time-split PR-AUC': f\"{r['pr_auc']:.3f} [{lo:.3f}, {hi:.3f}]\",\n"
+        "        'test fail rate': f\"{r['base_rate']:.3f}\",\n"
+        "        'time-split ROC-AUC': f\"{r['roc_auc']:.3f} [{rlo:.3f}, {rhi:.3f}]\",\n"
+        "        'recall @ 5% false alarms': f\"{r['recall_at_5pct_fpr']:.3f}\",\n"
+        "    })\n"
+        "results = pd.DataFrame(rows).set_index('model')\nresults"
+    ),
+    code(
+        "fig, ax = plt.subplots(figsize=(6, 4.5))\n"
+        "for name, (_, p) in test_scores.items():\n"
+        "    PrecisionRecallDisplay.from_predictions(y[te], p, name=name, ax=ax)\n"
+        "ax.axhline(y[te].mean(), ls='--', c='gray', label=f'random model ({y[te].mean():.3f})')\n"
+        "ax.set_title('Precision-recall on the time-ordered test period'); ax.legend()\n"
+        "plt.tight_layout(); plt.savefig(FIG_DIR / 'secom_pr_curve.png', dpi=150)"
+    ),
+    md(
+        "## 3. Why is the time-ordered test so much harder? Checking for drift\n\n"
+        "*Adversarial validation:* train a classifier to tell training-period runs from "
+        "test-period runs. If it can (AUC near 1), the sensor readings themselves changed over "
+        "time."
+    ),
+    code(
+        "period = np.zeros(len(y)); period[te] = 1\n"
+        "Xc = S.SensorCleaner().fit(X).transform(X)\n"
+        "adv = lgb.LGBMClassifier(n_estimators=200, num_leaves=15, verbose=-1)\n"
+        "adv_p = cross_val_predict(adv, Xc, period, method='predict_proba',\n"
+        "                          cv=StratifiedKFold(5, shuffle=True, random_state=0))[:, 1]\n"
+        "adv_auc = roc_auc_score(period, adv_p)\n"
+        "imp = pd.Series(adv.fit(Xc, period).booster_.feature_importance('gain'), "
+        "index=Xc.columns)\n"
+        "print(f'adversarial AUC (train period vs test period): {adv_auc:.3f}')\n"
+        "(imp / imp.sum()).sort_values(ascending=False).head(5).rename('share of gain')"
+    ),
+    md("## 4. Which sensors drive the prediction? (SHAP on LightGBM, coefficients for L1)"),
+    code(
+        "gbm, _ = test_scores['LightGBM']\n"
+        "shap = S.lgbm_shap(gbm, X.iloc[tr])\n"
+        "top = shap.abs().mean().sort_values(ascending=False)\n"
+        "lr, _ = test_scores['Logistic (L1)']\n"
+        "coef = pd.Series(lr.named_steps['clf'].coef_[0], index=lr.named_steps['clean'].columns_)\n"
+        "nonzero = coef[coef != 0].abs().sort_values(ascending=False)\n"
+        "print(f'L1 logistic keeps {len(nonzero)} sensors; '\n"
+        "      f'{len(set(top.index[:20]) & set(nonzero.index[:20]))} of the top 20 overlap with "
+        "SHAP')\n"
+        "ax = top.head(15).sort_values().plot.barh(figsize=(6, 5))\n"
+        "ax.set_xlabel('mean |SHAP value| (training runs)')\n"
+        "ax.set_title('Top sensors for LightGBM')\n"
+        "plt.tight_layout(); plt.savefig(FIG_DIR / 'secom_shap_top.png', dpi=150)"
+    ),
+    md(
+        "## 5. Do the top sensors keep their signal over time?\n\n"
+        "Single-sensor ROC-AUC in the training period vs the test period (0.5 = no signal)."
+    ),
+    code(
+        "def single_auc(col, idx):\n"
+        "    v = X[col].fillna(X[col].iloc[tr].median()).iloc[idx]\n"
+        "    return roc_auc_score(y[idx], v)\n\n"
+        "stab = pd.DataFrame({\n"
+        "    'train AUC': [single_auc(c, tr) for c in top.index[:10]],\n"
+        "    'test AUC': [single_auc(c, te) for c in top.index[:10]],\n"
+        "}, index=top.index[:10])\n"
+        "# Direction-free strength: 0.5 = none, 1.0 = perfect\n"
+        "stab['train strength'] = (stab['train AUC'] - 0.5).abs() + 0.5\n"
+        "stab['test strength'] = (stab['test AUC'] - 0.5).abs() + 0.5\n"
+        "stab"
+    ),
+    code(
+        "ax = stab[['train strength', 'test strength']].plot.bar(figsize=(7, 3.5))\n"
+        "ax.axhline(0.5, c='gray', ls='--'); ax.set_ylim(0.45, 0.8)\n"
+        "ax.set_ylabel('single-sensor AUC strength'); ax.set_title('Top-10 SHAP sensors: "
+        "signal before vs after the split')\n"
+        "plt.tight_layout(); plt.savefig(FIG_DIR / 'secom_sensor_drift.png', dpi=150)"
+    ),
+    md("## 6. Save results for the README"),
+    code(
+        "out = {name: S.score_all(y[te], p) for name, (_, p) in test_scores.items()}\n"
+        "for name, (_, p) in test_scores.items():\n"
+        "    out[name]['pr_auc_95ci'] = S.bootstrap_ci(y[te], p)\n"
+        "out['adversarial_auc'] = adv_auc\n"
+        "out['top_sensors_shap'] = top.head(10).round(4).to_dict()\n"
+        "Path('../reports/results_secom.json').write_text(json.dumps(out, indent=2))\n"
+        "out"
+    ),
+    md(SECOM_MODEL_FINDINGS),
+]
+
+
 COLAB_URL = (
     "https://colab.research.google.com/github/join8112/wafer-yield-portfolio/blob/main/"
     "notebooks/04_cnn_colab.ipynb"
@@ -384,6 +547,7 @@ NOTEBOOKS = {
     "02_eda_secom.ipynb": secom,
     "03_baseline_features.ipynb": baseline,
     "04_cnn_colab.ipynb": cnn_nb,
+    "05_secom_model.ipynb": secom_model,
 }
 
 if __name__ == "__main__":
