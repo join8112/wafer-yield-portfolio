@@ -1,11 +1,18 @@
 """Generate the EDA notebooks from source so they stay reviewable in git diffs.
 
+Note: regenerating overwrites the executed notebooks and clears their outputs;
+re-run them afterwards.
+
 python scripts/make_notebooks.py
 """
 
 from pathlib import Path
 
 import nbformat as nbf
+
+REPORTS = Path(__file__).resolve().parents[1] / "reports"
+WM_FINDINGS = (REPORTS / "findings_01_wm811k.md").read_text(encoding="utf-8")
+SECOM_FINDINGS = (REPORTS / "findings_02_secom.md").read_text(encoding="utf-8")
 
 NB_DIR = Path(__file__).resolve().parents[1] / "notebooks"
 
@@ -86,14 +93,7 @@ wm811k = [
     ),
     md("## 5. Train / test split provided by the dataset"),
     code("lab = df[df['is_labeled']]\npd.crosstab(lab['failure_type'], lab['split'])"),
-    md(
-        "## Findings\n\n"
-        "_Fill in after running on the real data. "
-        "Keep each point to one sentence with a number._\n\n"
-        "- Labeled share: …\n- Largest / smallest class ratio: …\n- Map shapes: …\n"
-        "- Lowest-yield patterns: …\n\n"
-        "**Decisions for step 2:** evaluation metric, input size, imbalance handling."
-    ),
+    md(WM_FINDINGS),
 ]
 
 secom = [
@@ -135,13 +135,7 @@ secom = [
         "ax1.set_title('SECOM runs and fail rate per week'); plt.tight_layout()\n"
         "plt.savefig(FIG_DIR / 'secom_fail_rate_time.png', dpi=150)"
     ),
-    md(
-        "## Findings\n\n"
-        "_Fill in after running on the real data._\n\n"
-        "- Fail rate: …\n- Features dropped (constant / >50% missing): …\n"
-        "- Highly correlated pairs: …\n- Drift over time: …\n\n"
-        "**Decisions for step 3:** imputation, feature reduction, split strategy, metric (PR-AUC)."
-    ),
+    md(SECOM_FINDINGS),
 ]
 
 

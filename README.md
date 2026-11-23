@@ -49,9 +49,41 @@ flowchart LR
 - [ ] **Step 3 — Process-based fail prediction** (SECOM): feature reduction, LightGBM/XGBoost, SHAP
 - [ ] **Step 4 — Defect → yield analysis & demo**: yield loss per pattern, Streamlit app
 
+## Key findings so far (step 1: EDA)
+
+**Defect pattern drives yield loss, but unevenly.** Mean die yield by pattern on the 172,950
+labeled WM-811K wafers:
+
+| Pattern | Near-full | Random | Donut | Center | Edge-Loc | Edge-Ring | Loc | Scratch | none |
+|---|---|---|---|---|---|---|---|---|---|
+| Mean die yield | 12% | 52% | 72% | 77% | 82% | 85% | 85% | 90% | 89% |
+
+`Near-full` and `Random` wafers are effectively scrap, while `Scratch` costs almost nothing in die
+count. Catching high-impact patterns early matters more than treating all classes equally.
+
+<img src="reports/figures/wm811k_examples.png" width="420" alt="Example wafer maps per defect pattern">
+<img src="reports/figures/wm811k_yield_by_type.png" width="420" alt="Die yield by defect pattern">
+
+**Both datasets are heavily imbalanced.** The rarest wafer class (`Near-full`, 149 wafers) is
+~990x smaller than `none`; only 6.6% of SECOM runs fail. → Metrics are macro-F1 and PR-AUC.
+
+**SECOM is noisy and redundant.** 116 of 590 sensors are constant, 28 are mostly empty, and 329
+sensor pairs correlate above 0.95.
+
+**SECOM's fail rate drifts over time**, from ~10–23% per week in July–August to mostly 1–6% from
+September. A random split would overstate performance, so step 3 uses a time-ordered split.
+
+<img src="reports/figures/secom_fail_rate_time.png" width="560" alt="SECOM weekly fail rate">
+
+**WM-811K's original train/test split has very different class mixes** in each half, so step 2
+re-splits labeled wafers by class, grouped by lot to avoid leakage.
+
+Full write-ups: [WM-811K findings](reports/findings_01_wm811k.md) ·
+[SECOM findings](reports/findings_02_secom.md)
+
 ## Results
 
-_Filled in as each step is completed._
+_Model results are filled in as each step is completed._
 
 | Task | Model | Metric | Score |
 |---|---|---|---|
