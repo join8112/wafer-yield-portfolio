@@ -1,0 +1,53 @@
+{
+  "X": {
+    "shape": [
+      172950,
+      64,
+      64
+    ],
+    "dtype": "uint8",
+    "sha256": "da4079ff8fd42f515e82161e07c6be39cecf4526d32a8d55f2ae60fb869528c5"
+  },
+  "die_yield": {
+    "shape": [
+      172950
+    ],
+    "dtype": "float32",
+    "sha256": "840ec63d92714695ac09ca902dcfff4676168da61d8016cd8b53aca7864b02ae"
+  },
+  "lot": {
+    "shape": [
+      172950
+    ],
+    "dtype": "object",
+    "sha256": "5f9dd3ce8e659d25674340db1974496a14d30732d563d190d2d81f514f200021"
+  },
+  "n_fail": {
+    "shape": [
+      172950
+    ],
+    "dtype": "int32",
+    "sha256": "df10030b14081ddfdfd457dcbd7b38bfadf218cd32b3a016902631144b12f0b9"
+  },
+  "orig_split": {
+    "shape": [
+      172950
+    ],
+    "dtype": "object",
+    "sha256": "6240344229b8164967f3bb64a51b3d7c014abe740f14676b0647849602c7ee24"
+  },
+  "split": {
+    "shape": [
+      172950
+    ],
+    "dtype": "object",
+    "sha256": "1e7a24d6a97ebf1c3642d700fd9930f514dae8db1a9d9f98fbc4c3147c0122aa"
+  },
+  "y": {
+    "shape": [
+      172950
+    ],
+    "dtype": "int64",
+    "sha256": "a839a2a5beab6abce35bf2e8c880ae73eea07b6aa932f8ec2ba860bcdf5896c8"
+  }
+}
