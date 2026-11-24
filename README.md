@@ -3,11 +3,16 @@
 ![CI](https://github.com/join8112/wafer-yield-portfolio/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://wafer-yield-portfolio.streamlit.app/)
+
+**▶ Live demo: [wafer-yield-portfolio.streamlit.app](https://wafer-yield-portfolio.streamlit.app/)**: classify a wafer map, see what its defect pattern costs in
+yield, and explore the SECOM drift findings in the browser, with nothing to install.
 
 > **中文摘要：** 以公開半導體資料建立兩個模型：(1) 晶圓圖缺陷型態分類（WM-811K，CNN），
 > (2) 由製程感測參數預測良品/不良（SECOM，梯度提升 + SHAP），並分析不同缺陷型態造成的良率損失。
 > 重點放在不平衡資料處理、可解釋性，以及對製程工程師有用的結論。
 > 最後以 Streamlit 互動展示串起三部分：分類晶圓、估計各缺陷型態的良率損失、找出關鍵製程訊號。
+> **線上展示：** [https://wafer-yield-portfolio.streamlit.app/](https://wafer-yield-portfolio.streamlit.app/)（免安裝，直接在瀏覽器操作）
 
 ## Why this project
 
@@ -172,19 +177,24 @@ lost per wafer beyond pattern-free wafers (89.4%).
 
 ## Interactive demo
 
+**Try it online: [wafer-yield-portfolio.streamlit.app](https://wafer-yield-portfolio.streamlit.app/)**
+
 A Streamlit app ties the three parts together: classify a wafer map (test-set examples or your
 own CSV), see what its pattern costs and its typical suspects, explore the yield-loss ranking,
 and review the SECOM drift findings.
 
 <img src="reports/figures/app_demo.png" width="860" alt="Streamlit demo: classify a wafer">
 
+The live version is hosted on [Streamlit Community Cloud](https://streamlit.io/cloud), which puts
+the app to sleep after a few days without visitors; if you see a "wake up" button, click it and
+the app is back in about a minute. To run it locally instead:
+
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-It needs only the small files in `app/assets/` (a ~5 MB model and 225 test wafers), so it also
-runs on [Streamlit Community Cloud](https://streamlit.io/cloud) with `app/streamlit_app.py` as the
-entry point. `python scripts/build_app_assets.py` rebuilds those files from the dataset.
+It needs only the small files in `app/assets/` (a ~5 MB model and 225 test wafers), with
+`app/streamlit_app.py` as the entry point. `python scripts/build_app_assets.py` rebuilds those files from the dataset.
 
 ## Repository structure
 
@@ -196,6 +206,7 @@ entry point. `python scripts/build_app_assets.py` rebuilds those files from the 
 │   ├── download_data.py  # fetches both datasets
 │   ├── prepare_wm811k.py # 64x64 maps + lot-grouped split -> compact .npz
 │   ├── build_app_assets.py # small model + sample wafers for the demo
+│   ├── verify_dataset.py # checksums prove a rebuilt dataset is identical
 │   └── make_notebooks.py # notebooks are generated from source for clean diffs
 ├── src/wafer/            # data, eda, preprocess, features, evaluate, cnn, secom, yield_analysis
 ├── tests/                # pytest on synthetic data, runs in CI without downloads
@@ -215,12 +226,19 @@ python scripts/download_data.py
 
 jupyter lab notebooks/          # 01, 02: exploratory analysis
 python scripts/prepare_wm811k.py  # builds data/processed/wm811k_labeled_64.npz
+python scripts/verify_dataset.py  # checks it is identical to the data behind the results
                                   # 03: feature baseline (CPU, a few minutes)
                                   # 05: SECOM model (CPU, under a minute)
                                   # 06: yield by pattern (CPU, ~2 minutes)
 streamlit run app/streamlit_app.py  # interactive demo
 pytest
 ```
+
+**Verifying the data:** the processed dataset is not committed, because WM-811K is shared on
+Kaggle without a clear licence for redistribution. Instead, `reports/data_checksums.json` holds a
+SHA-256 checksum of every array in it (wafer maps, labels, lots, split, yields).
+`verify_dataset.py` rebuilds those checksums from your own copy, so anyone can confirm they are
+evaluating on exactly the same wafers and the same lot-grouped split.
 
 **CNN (notebook 04) on Colab:** open
 [`04_cnn_colab.ipynb` in Colab](https://colab.research.google.com/github/join8112/wafer-yield-portfolio/blob/main/notebooks/04_cnn_colab.ipynb),
@@ -242,7 +260,7 @@ on a laptop CPU.
 - **Honest evaluation**: time-ordered and lot-grouped splits, bootstrap intervals, adversarial validation for drift
 - **Domain reasoning**: yield-loss attribution by defect pattern (frequency × severity), prioritising fixes, sensor shortlists for engineers
 - **Engineering**: installable package, tests on synthetic data, CI, reproducible setup
-- **Communication**: interactive Streamlit demo, findings written for engineers and managers
+- **Communication**: [live Streamlit demo](https://wafer-yield-portfolio.streamlit.app/), findings written for engineers and managers
 
 ## License
 
